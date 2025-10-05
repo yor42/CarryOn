@@ -37,7 +37,7 @@ public class ItemEntity extends Item
 
 	public ItemEntity()
 	{
-		this.setUnlocalizedName("entity_item");
+		this.setTranslationKey("entity_item");
 		this.setRegistryName(CarryOn.MODID, "entity_item");
 		ForgeRegistries.ITEMS.register(this);
 		this.setMaxStackSize(1);

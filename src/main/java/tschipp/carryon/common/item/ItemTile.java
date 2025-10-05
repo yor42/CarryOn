@@ -46,6 +46,8 @@ import tschipp.carryon.common.event.ItemEvents;
 import tschipp.carryon.common.handler.CustomPickupOverrideHandler;
 import tschipp.carryon.common.handler.ModelOverridesHandler;
 
+import static net.minecraft.nbt.NBTBase.getTypeName;
+
 public class ItemTile extends Item
 {
 
@@ -54,7 +56,7 @@ public class ItemTile extends Item
 
 	public ItemTile()
 	{
-		this.setUnlocalizedName("tile_item");
+		this.setTranslationKey("tile_item");
 		this.setRegistryName(CarryOn.MODID, "tile_item");
 		ForgeRegistries.ITEMS.register(this);
 		this.setMaxStackSize(1);
@@ -160,7 +162,7 @@ public class ItemTile extends Item
 
 							// If the blockstate doesn't handle rotation, try to
 							// change rotation via NBT
-							if (!set && !getTileData(stack).hasNoTags())
+							if (!set && !getTileData(stack).isEmpty())
 							{
 								NBTTagCompound tag = getTileData(stack);
 								Set<String> keys = tag.getKeySet();
@@ -170,7 +172,7 @@ public class ItemTile extends Item
 									{
 										if (key.toLowerCase().equals(facingKey))
 										{
-											String type = tag.getTagTypeName(tag.getTagId(key));
+											String type = getTypeName(tag.getTagId(key));
 											switch (type)
 											{
 											case "TAG_String":

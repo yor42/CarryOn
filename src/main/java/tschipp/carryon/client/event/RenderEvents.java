@@ -73,7 +73,7 @@ public class RenderEvents
 	@SubscribeEvent
 	public void onScroll(MouseEvent event)
 	{
-		if (event.getDwheel() > 0 || event.getDwheel() < 0 || Minecraft.getMinecraft().gameSettings.keyBindPickBlock.isPressed())
+		if (event.getDwheel() != 0 || Minecraft.getMinecraft().gameSettings.keyBindPickBlock.isPressed())
 		{
 			ItemStack stack = Minecraft.getMinecraft().player.getHeldItemMainhand();
 

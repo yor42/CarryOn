@@ -40,6 +40,24 @@ import tschipp.carryon.common.scripting.ScriptChecker;
 
 public class RenderEntityEvents
 {
+	// Cache the reflection field to avoid repeated lookups
+	private static Field keyBindingPressedField = null;
+
+	static {
+		try {
+			// Find the 'pressed' field in KeyBinding class
+			for (Field f : KeyBinding.class.getDeclaredFields()) {
+				if (f.getType() == boolean.class) {
+					f.setAccessible(true);
+					keyBindingPressedField = f;
+					break;
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
 	/*
 	 * Prevents the Player from scrolling
 	 */
@@ -47,7 +65,7 @@ public class RenderEntityEvents
 	@SubscribeEvent
 	public void onScroll(MouseEvent event) throws IllegalArgumentException, IllegalAccessException
 	{
-		if (event.getDwheel() > 0 || event.getDwheel() < 0 || Minecraft.getMinecraft().gameSettings.keyBindPickBlock.isPressed())
+		if (event.getDwheel() != 0 || Minecraft.getMinecraft().gameSettings.keyBindPickBlock.isPressed())
 		{
 			ItemStack stack = Minecraft.getMinecraft().player.getHeldItemMainhand();
 
@@ -82,7 +100,6 @@ public class RenderEntityEvents
 					Minecraft.getMinecraft().player.closeScreen();
 					Minecraft.getMinecraft().currentScreen = null;
 					Minecraft.getMinecraft().setIngameFocus();
-
 				}
 			}
 		}
@@ -93,36 +110,38 @@ public class RenderEntityEvents
 	 */
 	@SideOnly(Side.CLIENT)
 	@SubscribeEvent
-	public void inputEvent(InputEvent event) throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InvocationTargetException
+	public void inputEvent(InputEvent event) throws SecurityException, IllegalArgumentException, IllegalAccessException, InvocationTargetException
 	{
 		GameSettings settings = Minecraft.getMinecraft().gameSettings;
-		Field field = KeyBinding.class.getDeclaredFields()[8];
-		field.setAccessible(true);
 		ItemStack stack = Minecraft.getMinecraft().player.getHeldItemMainhand();
 		EntityPlayer player = Minecraft.getMinecraft().player;
 
 		if (!stack.isEmpty() && stack.getItem() == RegistrationHandler.itemEntity && ItemEntity.hasEntityData(stack))
 		{
-			if (settings.keyBindDrop.isPressed())
+			// Use cached field if available
+			if (keyBindingPressedField != null)
 			{
-				field.set(settings.keyBindDrop, false);
-			}
-			if (settings.keyBindSwapHands.isPressed())
-			{
-				field.set(settings.keyBindSwapHands, false);
-			}
-			for (KeyBinding keyBind : settings.keyBindsHotbar)
-			{
-				if (keyBind.isPressed())
+				if (settings.keyBindDrop.isPressed())
 				{
-					field.set(keyBind, false);
+					keyBindingPressedField.set(settings.keyBindDrop, false);
+				}
+				if (settings.keyBindSwapHands.isPressed())
+				{
+					keyBindingPressedField.set(settings.keyBindSwapHands, false);
+				}
+				for (KeyBinding keyBind : settings.keyBindsHotbar)
+				{
+					if (keyBind.isPressed())
+					{
+						keyBindingPressedField.set(keyBind, false);
+					}
 				}
 			}
 		}
 
 		int current = player.inventory.currentItem;
 
-		if (player.getEntityData().hasKey("carrySlot") ? player.getEntityData().getInteger("carrySlot") != current : false)
+		if (player.getEntityData().hasKey("carrySlot") && player.getEntityData().getInteger("carrySlot") != current)
 		{
 			player.inventory.currentItem = player.getEntityData().getInteger("carrySlot");
 		}
@@ -145,8 +164,7 @@ public class RenderEntityEvents
 		{
 			if(Loader.isModLoaded("realrender") || Loader.isModLoaded("rfpr"))
 				return;
-			
-			
+
 			Entity entity = ItemEntity.getEntity(stack, world);
 
 			if (entity != null)
@@ -159,13 +177,22 @@ public class RenderEntityEvents
 				entity.rotationYaw = 0.0f;
 				entity.prevRotationYaw = 0.0f;
 				entity.setRotationYawHead(0.0f);
-				
+
 				float height = entity.height;
 				float width = entity.width;
+				float scale = 0.8f;
+
 				GlStateManager.pushMatrix();
-				GlStateManager.scale(.8, .8, .8);
+
+				// Apply rotation first
 				GlStateManager.rotate(180, 0, 1, 0);
-				GlStateManager.translate(0.0, -height - .1, width + 0.1);
+
+				// Then translate IN WORLD SPACE (multiply by scale since we're translating before scaling)
+				GlStateManager.translate(0.0, (-height - 0.1f) * scale, (width + 0.1f) * scale);
+
+				// Now apply scale
+				GlStateManager.scale(scale, scale, scale);
+
 				GlStateManager.enableAlpha();
 
 				if (perspective == 0)
@@ -178,7 +205,7 @@ public class RenderEntityEvents
 					{
 						double[] translation = ScriptParseHelper.getXYZArray(carryOverride.getRenderTranslation());
 						double[] rotation = ScriptParseHelper.getXYZArray(carryOverride.getRenderRotation());
-						double[] scale = ScriptParseHelper.getScale(carryOverride.getRenderScale());
+						double[] overrideScale = ScriptParseHelper.getScale(carryOverride.getRenderScale());
 						String entityname = carryOverride.getRenderNameEntity();
 						if (entityname != null)
 						{
@@ -200,19 +227,17 @@ public class RenderEntityEvents
 						GlStateManager.rotate((float) rotation[0], 1, 0, 0);
 						GlStateManager.rotate((float) rotation[1], 0, 1, 0);
 						GlStateManager.rotate((float) rotation[2], 0, 0, 1);
-						GlStateManager.scale(scale[0], scale[1], scale[2]);
-
+						GlStateManager.scale(overrideScale[0], overrideScale[1], overrideScale[2]);
 					}
 
 					if(entity instanceof EntityLiving)
 						((EntityLiving) entity).hurtTime = 0;
-					
+
 					this.renderEntityStatic(entity);
 					Minecraft.getMinecraft().getRenderManager().setRenderShadow(true);
 				}
 
 				GlStateManager.disableAlpha();
-				GlStateManager.scale(1, 1, 1);
 				GlStateManager.popMatrix();
 
 				RenderHelper.disableStandardItemLighting();
@@ -253,9 +278,7 @@ public class RenderEntityEvents
 		GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
 
 		this.setLightmapDisabled(false);
-		
-		
-		
+
 		Minecraft.getMinecraft().getRenderManager().renderEntity(entity, 0.0D, 0.0D, 0.0D, f, 0.0F, true);
 		this.setLightmapDisabled(true);
 	}
@@ -302,7 +325,6 @@ public class RenderEntityEvents
 	{
 		World world = Minecraft.getMinecraft().world;
 		EntityPlayer player = event.getEntityPlayer();
-		event.getRenderer().getMainModel();
 		EntityPlayerSP clientPlayer = Minecraft.getMinecraft().player;
 		ItemStack stack = player.getHeldItemMainhand();
 		float partialticks = event.getPartialRenderTick();
@@ -316,7 +338,7 @@ public class RenderEntityEvents
 				rotation = -(player.prevRotationYawHead + (player.rotationYawHead - player.prevRotationYawHead) * partialticks);
 			else
 				rotation = -(player.prevRenderYawOffset + (player.renderYawOffset - player.prevRenderYawOffset) * partialticks);
-			
+
 			if (entity != null)
 			{
 				double d0 = player.lastTickPosX + (player.posX - player.lastTickPosX) * partialticks;
@@ -334,6 +356,7 @@ public class RenderEntityEvents
 				float height = entity.height;
 				float width = entity.width;
 				float multiplier = height * width;
+				float scale = (10 - multiplier) * 0.08f;
 
 				entity.setPosition(c0, c1, c2);
 				entity.rotationYaw = 0.0f;
@@ -341,27 +364,41 @@ public class RenderEntityEvents
 				entity.setRotationYawHead(0.0f);
 
 				GlStateManager.pushMatrix();
-				GlStateManager.translate(xOffset, yOffset, zOffset);
-				GlStateManager.scale((10 - multiplier) * 0.08, (10 - multiplier) * 0.08, (10 - multiplier) * 0.08);
-				GlStateManager.rotate(rotation, 0, 1f, 0);
-				GlStateManager.translate(0.0, height / 2 + -(height / 2) + 1, width - 0.1 < 0.7 ? width - 0.1 + (0.7 - (width - 0.1)) : width - 0.1);
 
+				// First translate to player position
+				GlStateManager.translate(xOffset, yOffset, zOffset);
+
+				// Then rotate
+				GlStateManager.rotate(rotation, 0, 1f, 0);
+
+				// Calculate entity positioning IN WORLD SPACE (accounting for scale)
+				// The original moved by these amounts in scaled space, so multiply by scale for world space
+                float entityZOffset = (Math.max(width - 0.1f, 0.7f)) * scale;  // Fixed to account for scale
+
+				// Translate for entity position (before scaling, in world space)
+				GlStateManager.translate(0.0, scale, entityZOffset);
+
+				// NOW apply the scale
+				GlStateManager.scale(scale, scale, scale);
+
+				// Mod compatibility adjustments remain the same (after scaling, so divide by scale)
 				if((Loader.isModLoaded("realrender") || Loader.isModLoaded("rfpr")) && Minecraft.getMinecraft().gameSettings.thirdPersonView == 0)
-					GlStateManager.translate(0, 0, -0.3);
-				
+					GlStateManager.translate(0, 0, -0.3 / scale);
+
 				if (player.isSneaking())
 				{
-					GlStateManager.translate(0, -0.3, 0);
+					GlStateManager.translate(0, -0.3 / scale, 0);
 				}
 
+
 				Minecraft.getMinecraft().getRenderManager().setRenderShadow(false);
-				
+
 				CarryOnOverride carryOverride = ScriptChecker.getOverride(player);
 				if (carryOverride != null)
 				{
 					double[] translation = ScriptParseHelper.getXYZArray(carryOverride.getRenderTranslation());
 					double[] rot = ScriptParseHelper.getXYZArray(carryOverride.getRenderRotation());
-					double[] scale = ScriptParseHelper.getScale(carryOverride.getRenderScale());
+					double[] overrideScale = ScriptParseHelper.getScale(carryOverride.getRenderScale());
 					String entityname = carryOverride.getRenderNameEntity();
 					if (entityname != null)
 					{
@@ -379,21 +416,20 @@ public class RenderEntityEvents
 						}
 					}
 
+					// These transformations happen after main scaling
 					GlStateManager.translate(translation[0], translation[1], translation[2]);
 					GlStateManager.rotate((float) rot[0], 1, 0, 0);
 					GlStateManager.rotate((float) rot[1], 0, 1, 0);
 					GlStateManager.rotate((float) rot[2], 0, 0, 1);
-					GlStateManager.scale(scale[0], scale[1], scale[2]);
-
+					GlStateManager.scale(overrideScale[0], overrideScale[1], overrideScale[2]);
 				}
-				
+
 				if(entity instanceof EntityLiving)
 					((EntityLiving) entity).hurtTime = 0;
-				
+
 				Minecraft.getMinecraft().getRenderManager().renderEntityStatic(entity, 0.0f, false);
 				Minecraft.getMinecraft().getRenderManager().setRenderShadow(true);
 
-				GlStateManager.scale(1, 1, 1);
 				GlStateManager.popMatrix();
 			}
 		}

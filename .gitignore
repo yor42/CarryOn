@@ -1,12 +1,10 @@
 # eclipse
 bin
-oldBuilds
 *.launch
 .settings
 .metadata
 .classpath
 .project
-.DS_Store
 
 # idea
 out
@@ -22,4 +20,3 @@ build
 # other
 eclipse
 run
-

@@ -379,7 +379,7 @@ public class ItemEvents
 							{
 								sendPacket(player, 9, 0);
 								world.setBlockState(pos, statee);
-								if (!tag.hasNoTags())
+								if (!tag.isEmpty())
 									TileEntity.create(world, tag);
 
 								player.sendMessage(new TextComponentString(TextFormatting.RED + "Error detected. Cannot pick up block."));
